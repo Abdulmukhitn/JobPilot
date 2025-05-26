@@ -18,6 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -33,6 +34,13 @@ DEBUG = os.getenv('DJANGO_DEBUG', 'False').lower() == 'true'
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
+# CORS settings (if using django-cors-headers)
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://API_HOST:8000",  # Replace with your API host
+]
 # Application definition
 
 INSTALLED_APPS = [
@@ -44,6 +52,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'rest_framework.authtoken',
     'social_django',  # Add social auth
     'api',
 ]
@@ -150,14 +159,15 @@ CORS_ALLOW_ALL_ORIGINS = True  # Only for development
 CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
-    ],
 }
+
 
 # JWT Settings
 from datetime import timedelta
@@ -168,27 +178,29 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': True,
 }
 
+# Authentication settings
 AUTHENTICATION_BACKENDS = (
-    'social_core.backends.google.GoogleOAuth2',
-    'social_core.backends.github.GithubOAuth2',
-    'social_core.backends.linkedin.LinkedinOAuth2',
     'django.contrib.auth.backends.ModelBackend',
+    'social_core.backends.google.GoogleOAuth2',
 )
 
 # Social Auth settings
 SOCIAL_AUTH_POSTGRES_JSONFIELD = True
 SOCIAL_AUTH_URL_NAMESPACE = 'social'
-SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = ''  # Your Google OAuth2 Client ID
-SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = ''  # Your Google OAuth2 Client Secret
 
-SOCIAL_AUTH_GITHUB_KEY = ''  # Your Github OAuth App Client ID
-SOCIAL_AUTH_GITHUB_SECRET = ''  # Your Github OAuth App Client Secret
+# Google OAuth2 settings
+GOOGLE_OAUTH2_CLIENT_ID = os.getenv('GOOGLE_OAUTH2_CLIENT_ID', '')
+GOOGLE_OAUTH2_CLIENT_SECRET = os.getenv('GOOGLE_OAUTH2_CLIENT_SECRET', '')
 
-SOCIAL_AUTH_LINKEDIN_OAUTH2_KEY = ''  # Your LinkedIn OAuth App Client ID
-SOCIAL_AUTH_LINKEDIN_OAUTH2_SECRET = ''  # Your LinkedIn OAuth App Client Secret
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = GOOGLE_OAUTH2_CLIENT_ID
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = GOOGLE_OAUTH2_CLIENT_SECRET
+SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = [
+    'https://www.googleapis.com/auth/userinfo.email',
+    'https://www.googleapis.com/auth/userinfo.profile',
+]
 
 # OAuth specific settings
 LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'home'
+LOGIN_REDIRECT_URL = '/'
 LOGOUT_URL = 'logout'
 LOGOUT_REDIRECT_URL = 'login'

@@ -1,9 +1,17 @@
 {
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/material": "^7.1.0",
     "@types/yup": "^0.32.0",
     "yup": "^1.6.1"
   },
   "devDependencies": {
+    "@types/babel__core": "^7.20.5",
+    "@types/babel__generator": "^7.27.0",
+    "@types/babel__template": "^7.4.4",
+    "@types/babel__traverse": "^7.20.7",
+    "@types/estree": "^1.0.7",
     "@types/node": "^22.15.21",
     "@types/react-dom": "^19.1.5"
   }

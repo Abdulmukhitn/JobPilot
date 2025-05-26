@@ -41,6 +41,34 @@ export const register = createAsyncThunk(
   }
 );
 
+// Helper function to extract error message from API response
+const getErrorMessage = (error: any): string => {
+  if (typeof error === 'string') {
+    return error;
+  }
+  
+  if (error?.detail) {
+    return error.detail;
+  }
+  
+  if (error?.message) {
+    return error.message;
+  }
+  
+  // Handle field-specific errors like {username: ["This field is required"]}
+  if (typeof error === 'object') {
+    const firstKey = Object.keys(error)[0];
+    if (firstKey && Array.isArray(error[firstKey])) {
+      return error[firstKey][0];
+    }
+    if (firstKey) {
+      return error[firstKey];
+    }
+  }
+  
+  return 'An error occurred';
+};
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -64,7 +92,7 @@ const authSlice = createSlice({
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        state.error = getErrorMessage(action.payload);
       })
       .addCase(register.pending, (state) => {
         state.isLoading = true;
@@ -77,7 +105,7 @@ const authSlice = createSlice({
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading = false;
-        state.error = action.payload as string;
+        state.error = getErrorMessage(action.payload);
       });
   },
 });

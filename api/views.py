@@ -1,9 +1,10 @@
 from django.shortcuts import render, get_object_or_404
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework import serializers
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 from .models import Resume, Job, Application, JobSkillMatch
@@ -17,9 +18,15 @@ from .utils.hh_api import HHApi, sync_vacancies
 from django.conf import settings
 from social_django.utils import load_strategy, load_backend
 from social_core.exceptions import MissingBackend, AuthTokenError, AuthForbidden
+from django.urls import reverse
+from django.http import JsonResponse
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+from django.middleware.csrf import get_token
 import requests
 import io
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -324,3 +331,163 @@ def exchange_token(request):
             'user': UserSerializer(user).data
         })
     return Response({'error': 'Authentication failed'}, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['GET'])
+def api_root(request):
+    """
+    API root view that provides available endpoints
+    """
+    endpoints = {
+        'register': reverse('auth_register', request=request),
+        'login': reverse('token_obtain_pair', request=request),
+        'google_login': reverse('auth_google', request=request),
+        'users': reverse('user-list', request=request),
+        'resumes': reverse('resume-list', request=request),
+        'jobs': reverse('job-list', request=request),
+        'applications': reverse('application-list', request=request),
+    }
+    return Response(endpoints)
+
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'user': UserSerializer(user).data,
+            'tokens': {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+        }, status=status.HTTP_201_CREATED)
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        password = request.data.get('password')
+        
+        if not email or not password:
+            return Response({
+                'error': 'Please provide both email and password'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        user = User.objects.filter(email=email).first()
+        
+        if not user or not user.check_password(password):
+            return Response({
+                'error': 'Invalid credentials'
+            }, status=status.HTTP_401_UNAUTHORIZED)
+            
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'user': UserSerializer(user).data,
+            'tokens': {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+        })
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            refresh_token = request.data["refresh"]
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
+        except Exception:
+            return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
+
+class UserProfileView(generics.RetrieveUpdateAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+class JobListView(generics.ListCreateAPIView):
+    queryset = Job.objects.all()
+    serializer_class = JobSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Job.objects.all().order_by('-posted_date')
+
+class JobDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Job.objects.all()
+    serializer_class = JobSerializer
+    permission_classes = [IsAuthenticated]
+
+class JobSearchView(generics.ListAPIView):
+    serializer_class = JobSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = Job.objects.all()
+        query = self.request.query_params.get('q', None)
+        if query:
+            queryset = queryset.filter(title__icontains=query)
+        return queryset
+
+class ApplicationListView(generics.ListCreateAPIView):
+    serializer_class = ApplicationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Application.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class ApplicationDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ApplicationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Application.objects.filter(user=self.request.user)
+
+class ProfileView(generics.RetrieveUpdateAPIView):
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        return self.request.user
+
+class ResumeUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if 'file' not in request.FILES:
+            return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        file = request.FILES['file']
+        try:
+            # Parse resume using the ResumeParser utility
+            parser = ResumeParser()
+            parsed_data = parser.parse(file)
+            
+            # Create or update resume
+            resume, created = Resume.objects.update_or_create(
+                user=request.user,
+                defaults={
+                    'file': file,
+                    'parsed_data': parsed_data
+                }
+            )
+            
+            return Response({
+                'message': 'Resume uploaded successfully',
+                'resume': ResumeSerializer(resume).data
+            }, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

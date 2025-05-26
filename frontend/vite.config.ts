@@ -1,14 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path';
+import path from 'path'
+import { fileURLToPath } from 'url'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
-const __dirname = process.cwd();
-
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  root: '.',
-  publicDir: 'public',
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   server: {
     port: 3000,
     host: true,
@@ -23,14 +28,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
-    rollupOptions: {
-      input: {
-        main: resolve(__dirname, 'index.html')
-      }
-    }
-  }
+  },
+  optimizeDeps: {
+    include: ['@emotion/react', '@emotion/styled', '@mui/material']
+  },
+  esbuild: {
+    supported: {
+      'top-level-await': true
+    },
+  },
 });
-function resolve(__dirname: string, arg1: string): string {
-    return path.resolve(__dirname, arg1);
-}
 
