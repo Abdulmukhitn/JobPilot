@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@types/yup": "^0.32.0",
+    "yup": "^1.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/react-dom": "^19.1.5"
+  }
+}
